@@ -1,0 +1,219 @@
+<!doctype html><meta charset=utf-8>
+<title>Project</title>
+<div class="container" style="height:200px; width:500px; border:solid gold;">
+</div>
+<script>
+function createVirtualScroll() {
+  var surface = document.createElement('div');
+  surface.classList.add('list-surface');
+
+  var container, total = 0, cache = {}, containerHeight, containerWidth, elementHeight;
+
+  // To use during clean up
+  var containerPreviousOverflowY, containerPreviousPosition;
+
+  var api = {};
+
+  api.container = function(_) {
+    if (!arguments.length) {
+      return container;
+    }
+
+    // If we already have existing container, detach the surface
+    // from it.
+    if (container) {
+        container.removeChild(surface);
+        containerHeight = null;
+        container.style.overflowY = containerPreviousOverflowY;
+        container.style.position = containerPreviousPosition;
+        container.removeEventListener('scroll', onScroll);
+    }
+    // At this point, we're done with the reference to the old
+    // container, so we set the variable to the new container.
+    container = _;
+
+    // If new container given, attach to it
+    if (container) {
+      container.appendChild(surface);
+      updateContainerHeight();
+      updateContainerWidth();
+      containerPreviousOverflowY = container.style.overflowY;
+      container.style.overflowY = 'auto';
+
+      // If container has no position, set one so that our internal
+      // absolute positioning will work.
+      containerPreviousPosition = container.style.position;
+      if (!containerPreviousPosition) {
+          container.style.position = 'relative';
+      }
+
+      container.addEventListener('scroll', onScroll);
+    }
+
+    return this;
+  };
+
+  var scrollPosition = 0, rendering = false;
+  function onScroll() {
+    scrollPosition = container.scrollTop;
+
+    if (!rendering) {
+      rendering = true;
+      window.requestAnimationFrame(render);
+    }
+  }
+
+  api.total = function(_) {
+    if (!arguments.length) {
+      return total;
+    }
+
+    total = _;
+    return this;
+  };
+
+  api.pushData = function (data) {
+    data.forEach(function (datum) {
+      var key = datum.key;
+      var value = datum.value;
+
+      cache[key] = value;
+    });
+
+    render();
+  };
+
+  function updateContainerHeight() {
+    containerHeight = container.offsetHeight;
+  }
+
+  function updateContainerWidth() {
+    containerWidth = container.offsetWidth;
+  }
+
+  function render() {
+    if (!elementHeight) updateElementHeight();
+
+    var surfaceHeight = elementHeight * total;
+    surface.style.height = surfaceHeight + 'px';
+    var visibleStartIndex = Math.floor(scrollPosition / elementHeight);
+    var visibleEndIndex = Math.min(total, Math.ceil((scrollPosition + containerHeight) / elementHeight)) - 1;
+
+    ensureVisible(visibleStartIndex, visibleEndIndex);
+    //ensureVisible(0, total);
+    rendering = false;
+  }
+
+  var currentVisibleStart = 0, currentVisibleEnd = 0;
+  function ensureVisible(start, end) {
+    var index = start;
+
+    for (; index <= end; index++) {
+      renderRow(index);
+    }
+
+    if (start > currentVisibleStart) {
+      clearRange(currentVisibleStart, start - 1);
+    }
+
+    if (end < currentVisibleEnd) {
+      clearRange(end + 1, currentVisibleEnd);
+    }
+
+    currentVisibleStart = start;
+    currentVisibleEnd = end;
+  }
+
+  function clearRange(start, end) {
+    var index = start;
+
+    for (; index <= end; index++) {
+      clearRow(index);
+    }
+  }
+
+  function updateElementHeight() {
+    var element = renderRow(1);
+    elementHeight = element.offsetHeight;
+    surface.removeChild(element);
+  }
+
+  function getKey(number) {
+    return number + '';
+  }
+
+  function getFreeElement() {
+    return document.createElement('div');
+  }
+
+  function makeElement(datum) {
+    var element = document.createElement('div');
+    element.classList.add('list-element');
+    element.style.width = containerWidth + 'px';
+    element.style.wordBreak = 'break-all';
+    element.innerHTML = JSON.stringify(datum);
+    return element;
+  }
+
+  function clearRow(number) {
+    var key = getKey(number);
+    var element = visibleRows[key];
+    if (!element) return;
+
+    surface.removeChild(element);
+    delete visibleRows[key];
+  }
+
+  var visibleRows = {};
+  function renderRow(number) {
+    var key = getKey(number);
+    var datum = cache[key];
+    if (!datum) return false;
+
+    element = visibleRows[key];
+    if (element) return element;
+
+    var element = makeElement(datum);
+    surface.appendChild(element);
+
+    if (elementHeight) {
+      element.style.top = (number * elementHeight) + 'px';
+      element.style.position = 'absolute';
+      visibleRows[key] = element;
+    }
+
+    return element;
+  }
+
+  return api;
+}
+
+function makeid() {
+    var text = "";
+    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    for( var i=0; i < 5; i++ )
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+
+    return text;
+}
+var sampleData = [];
+var total = 10000;
+for(var index = 0; index < total; index++) {
+  sampleData.push({
+    key: index,
+    value: {
+      index: index,
+      id: makeid(),
+      str: makeid(),
+      num: Math.random() * 1000
+    }
+  });
+}
+
+var container = document.querySelector(".container");
+var vs = createVirtualScroll();
+vs.container(container);
+vs.total(total);
+vs.pushData(sampleData);
+</script>
